@@ -1,0 +1,157 @@
+{{- if .Values.extraDeployments.enabled }}
+{{- range .Values.extraDeployments.apps }}
+{{- if .configMap }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .name }}-config
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+data:
+  {{- range $key, $val := .configMap }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}
+{{- end }}
+{{- if .secret }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .name }}-secret
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+type: Opaque
+stringData:
+  {{- range $key, $val := .secret }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}
+{{- end }}
+{{- if .pvcName }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .name }}-pvc
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .name }}
+    spec:
+      {{- if or .pvcName .existingPvcName }}
+      volumes:
+        {{- if .pvcName }}
+        - name: file-share
+          persistentVolumeClaim:
+            claimName: {{ .name }}-pvc
+        {{- end }}
+        {{- if .existingPvcName }}
+        - name: existing-file-share
+          persistentVolumeClaim:
+            claimName: {{ .existingPvcName }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ .name }}
+          image: {{ .image | default $.Values.global.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ .port }}
+          {{- if or .configMap .existingConfigMap .secret .existingSecret }}
+          envFrom:
+            {{- if .existingConfigMap }}
+            - configMapRef:
+                name: {{ .existingConfigMap }}
+            {{- end }}
+            {{- if .configMap }}
+            - configMapRef:
+                name: {{ .name }}-config
+            {{- end }}
+            {{- if .existingSecret }}
+            - secretRef:
+                name: {{ .existingSecret }}
+            {{- end }}
+            {{- if .secret }}
+            - secretRef:
+                name: {{ .name }}-secret
+            {{- end }}
+          {{- end }}
+          {{- if .env }}
+          env:
+            {{- toYaml .env | nindent 12 }}
+          {{- end }}
+          {{- if or .pvcName .existingPvcName }}
+          volumeMounts:
+            {{- if .pvcName }}
+            - name: file-share
+              mountPath: /var/www/html/resources
+            {{- end }}
+            {{- if .existingPvcName }}
+            - name: existing-file-share
+              mountPath: /var/www/html/existing-resources
+            {{- end }}
+          {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+  {{- if and (eq .serviceType "LoadBalancer") .loadBalancerIP }}
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    service.beta.kubernetes.io/azure-load-balancer-ipv4: {{ .loadBalancerIP | quote }}
+  {{- else if eq .serviceType "LoadBalancer" }}
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+  {{- end }}
+spec:
+  type: {{ .serviceType | default "ClusterIP" }}
+  selector:
+    app: {{ .name }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ .port }}
+      targetPort: {{ .port }}
+  {{- if eq .serviceType "LoadBalancer" }}
+  sessionAffinity: None
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  {{- end }}
+{{- end }}
+{{- end }}

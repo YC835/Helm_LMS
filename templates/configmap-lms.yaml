@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lms-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+data:
+  MASTER_DATABASE_URL: {{ include "app.masterDbUrl" (dict "global" . "dbname" .Values.database.lmsDbname) | quote }}
+  REPORT_DATABASE_URL: {{ include "app.reportDbUrl" (dict "global" . "dbname" .Values.database.lmsDbname) | quote }}
+  SLAVE_DATABASE_URL: {{ include "app.slaveDbUrl" (dict "global" . "dbname" .Values.database.lmsDbname) | quote }}
+  API_AUTHENTICATION_MODE: {{ if and .Values.lmsConfig (index .Values.lmsConfig "API_AUTHENTICATION_MODE") }}{{ index .Values.lmsConfig "API_AUTHENTICATION_MODE" | quote }}{{ else }}"oauth2"{{ end }}
+  {{- if .Values.lmsConfig }}
+  {{- range $key, $val := .Values.lmsConfig }}
+  {{- if not (eq $key "API_AUTHENTICATION_MODE") }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}
+  {{- end }}
+  {{- end }}

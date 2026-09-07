@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lms
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.lms.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: lms
+  template:
+    metadata:
+      labels:
+        app: lms
+    spec:
+      volumes:
+        - name: azure-file-share
+          persistentVolumeClaim:
+            claimName: {{ include "app.pvcName" . }}
+        - name: fpm-config
+          configMap:
+            name: lms-fpm-config
+      containers:
+        - name: lms
+          image: {{ .Values.global.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9000
+          envFrom:
+            - configMapRef:
+                name: lms-config
+            - configMapRef:
+                name: common-config
+            - secretRef:
+                name: common-secret
+          env:
+            - name: LMS_DEBUG_LEVEL
+              value: Error
+          resources:
+            requests:
+              cpu: 55m
+              memory: 128Mi
+            limits:
+              cpu: "2"
+              memory: 8Gi
+          volumeMounts:
+            - name: azure-file-share
+              mountPath: /var/www/html/resources
+            - name: fpm-config
+              mountPath: /usr/local/etc/php-fpm.d/www.conf
+              subPath: www.conf
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lms
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: lms
+  ports:
+    - name: php-fpm
+      protocol: TCP
+      port: 9000
+      targetPort: 9000

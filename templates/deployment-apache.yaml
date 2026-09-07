@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apache
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.apache.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: apache
+  template:
+    metadata:
+      labels:
+        app: apache
+    spec:
+      volumes:
+        - name: apache-extra-config
+          configMap:
+            name: apache-extra-config
+        - name: azure-apache-file-share
+          persistentVolumeClaim:
+            claimName: {{ include "app.pvcName" . }}
+      containers:
+        - name: apache
+          image: {{ .Values.global.apacheImage }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: "2"
+              memory: 8Gi
+          volumeMounts:
+            - name: azure-apache-file-share
+              mountPath: /var/www/html/resources
+            - name: apache-extra-config
+              mountPath: /usr/local/apache2/conf/extra/php-fpm-proxy.conf
+              subPath: php-fpm-proxy.conf
+            - name: apache-extra-config
+              mountPath: /usr/local/apache2/conf/extra/custom_httpd.conf
+              subPath: custom_httpd.conf
+            - name: apache-extra-config
+              mountPath: /usr/local/apache2/conf/extra/security.conf
+              subPath: security.conf
+            - name: apache-extra-config
+              mountPath: /usr/local/apache2/conf/extra/performance.conf
+              subPath: performance.conf
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apache
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    {{- if .Values.apache.loadBalancerIP }}
+    service.beta.kubernetes.io/azure-load-balancer-ipv4: {{ .Values.apache.loadBalancerIP | quote }}
+    {{- end }}
+spec:
+  type: LoadBalancer
+  selector:
+    app: apache
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ .Values.apache.servicePort }}
+      targetPort: 80
+  sessionAffinity: None
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster

@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lms-fpm-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+data:
+  www.conf: |
+    [www]
+    user = www-data
+    group = www-data
+
+    listen = 0.0.0.0:9000
+
+    pm = dynamic
+    pm.max_children = 80
+
+    pm.start_servers = 20
+    pm.min_spare_servers = 15
+    pm.max_spare_servers = 30
+
+    pm.max_requests = 1000
+
+    pm.status_path = /fpm-status
+    ping.path = /ping
+
+    request_terminate_timeout = 120s
+    catch_workers_output = yes
+    php_admin_flag[log_errors] = on
+    php_admin_value[error_log] = /proc/self/fd/2
+    php_admin_value[display_errors] = On
+    php_admin_value[display_startup_errors] = On
+    php_admin_value[error_reporting] = E_ALL

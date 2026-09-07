@@ -1,0 +1,67 @@
+{{- if .Values.keda.enabled }}
+{{- range .Values.keda.scaledJobs }}
+{{- $type := trimPrefix "keda-" . }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: {{ . }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+spec:
+  failedJobsHistoryLimit: 5
+  jobTargetRef:
+    backoffLimit: 2
+    completions: 1
+    parallelism: 1
+    template:
+      spec:
+        activeDeadlineSeconds: 600
+        containers:
+          - name: lms
+            image: {{ $.Values.global.image }}
+            imagePullPolicy: IfNotPresent
+            command:
+              - /bin/sh
+              - -c
+              - |
+                php app/cron/cronworkerprocess.php --nodes {{ $type }} || true
+                echo "PHP exited - keeping pod alive and tailing logs"
+            env:
+              - name: LMS_DEBUG_LEVEL
+                value: Error
+            envFrom:
+              - configMapRef:
+                  name: lms-config
+              - configMapRef:
+                  name: common-config
+              - secretRef:
+                  name: common-secret
+            resources:
+              requests:
+                memory: 512Mi
+                cpu: 500m
+              limits:
+                memory: 2Gi
+            volumeMounts:
+              - name: automation
+                mountPath: /var/www/html/resources
+        restartPolicy: OnFailure
+        volumes:
+          - name: automation
+            persistentVolumeClaim:
+              claimName: {{ include "app.pvcName" $ }}
+  maxReplicaCount: 10
+  minReplicaCount: 0
+  pollingInterval: 60
+  successfulJobsHistoryLimit: 3
+  triggers:
+    - type: redis
+      metadata:
+        address: cronredis.{{ $.Release.Namespace }}.svc.cluster.local:6379
+        listLength: "1"
+        listName: tenant-dispatch-queue-{{ $type }}
+        mode: QueueLength
+{{- end }}
+{{- end }}

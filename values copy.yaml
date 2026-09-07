@@ -1,0 +1,137 @@
+# =============================================================================
+# Global Images
+# =============================================================================
+global:
+  image: "acr.azurecr.io/lms:ea-1.26.97.2"
+  apacheImage: "acr.azurecr.io/apache:ea-1.26.97.2.static"
+  upImage: "acr.azurecr.io/univeralprofile:up-1.26.23.47"
+
+# --- StorageClass ---
+storageClass:
+  enabled: false
+  name: "sc"
+  resourceGroup: "RG-EO-QA"
+  shareName: "fileshare"
+  storageSecret:
+    azurestorageaccountname: ""
+    azurestorageaccountkey: ""
+
+# --- PersistentVolume ---
+persistentVolume:
+  enabled: false
+  storageClassName: ""              # Required: existing StorageClass name
+  resourceGroup: "RG-EO-QA"
+  shareName: "fileshare"
+  storageSecret:
+    azurestorageaccountname: ""
+    azurestorageaccountkey: ""
+
+# --- PersistentVolumeClaim ---
+persistentVolumeClaim:
+  enabled: false
+  volumeName: ""                    # Required: existing PV name
+  storageClassName: ""              # Required: existing StorageClass name
+
+# --- Redis ---
+redis:
+  enabled: false
+  instances:
+    - redis
+    - redisnew
+    - cronredis
+
+# --- CronJobs ---
+cronJobs:
+  enabled: false
+  
+  jobs:
+    - name: cron-job-1
+      schedule: "* * * * *"
+    - name: cron-job-2
+      schedule: "*/5 * * * *"
+
+# --- KEDA ScaledJobs ---
+keda:
+  enabled: false
+  scaledJobs:
+    - keda-any
+    - keda-notify
+
+
+# --- common-config ConfigMap ---
+
+commonConfig:
+  # API_AUTHENTICATION_MODE: "saml"
+  # MY_NEW_KEY: "my-value"
+
+# =============================================================================
+# Database Connection
+# =============================================================================
+database:
+  masterHost: "mysql-dev.privatelink.mysql.database.azure.com"
+  slaveHost: "mysql-dev-ncus.privatelink.mysql.database.azure.com"
+  reportHost: "mysql-dev.privatelink.mysql.database.azure.com"
+  port: "3306"
+  upDbname: "up"
+  lmsDbname: "lms"
+
+# --- up-config ConfigMap ---
+# DB URLs auto-built from database section. Add extra keys below if needed.
+upConfig: {}
+
+# --- lms-config ConfigMap ---
+# DB URLs auto-built from database section. Add extra keys below if needed.
+lmsConfig:
+  LMS_URL: "https://dev.com"
+  UNIVERSAL_PROFILE_URL: "https://universalprofile.dev.com"
+  USERS_DATABASE: ""
+
+# --- common-secret Secret ---
+commonSecret:
+  MASTER_DATABASE_PASS: ""
+  MASTER_DATABASE_USER: ""
+  REPORT_DATABASE_PASS: ""
+  REPORT_DATABASE_USER: ""
+  SLAVE_DATABASE_PASS: ""
+  SLAVE_DATABASE_USER: ""
+  OAUTH_LMS_SECRET: ""
+  SENDGRID_API_KEY: ""
+
+# =============================================================================
+# Deployments & Services
+# =============================================================================
+
+# --- Apache ---
+apache:
+  replicas: 1
+  loadBalancerIP: ""                  # empty = auto-assign, set IP to use specific
+  servicePort: 8080                   # Service port (targetPort is always 80)
+
+# --- LMS ---
+lms:
+  replicas: 1
+
+# --- Universal Profile ---
+universalprofile:
+  replicas: 1
+  loadBalancerIP: ""                  # empty = auto-assign, set IP to use specific
+  servicePort: 8081                   # Service port (targetPort is always 80)
+
+# =============================================================================
+# Extra Deployments (add any custom app)
+# =============================================================================
+extraDeployments:
+  enabled: false
+  apps:
+    - name: my-app
+      image: "myregistry/myapp:v1"       # or leave empty to use global.image
+      port: 8080
+      serviceType: ClusterIP             # ClusterIP or LoadBalancer
+      loadBalancerIP: ""                  # only for LoadBalancer, empty = auto
+      pvcName: ""                         # empty = no PVC, set name to mount
+      configMap:
+        MY_KEY: "my-value"
+        ANOTHER_KEY: "another-value"
+      secret:
+        DB_PASS: ""
+        API_KEY: ""

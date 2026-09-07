@@ -1,0 +1,17 @@
+{{- if eq (include "app.pvcEnabled" .) "true" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "app.pvcName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: {{ include "app.pvcVolumeName" . }}
+  storageClassName: {{ include "app.storageClassName" . }}
+{{- end }}

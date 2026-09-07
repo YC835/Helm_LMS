@@ -1,0 +1,24 @@
+{{- if eq (include "app.pvEnabled" .) "true" }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "app.pvName" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ include "app.storageClassName" . }}
+  persistentVolumeReclaimPolicy: Retain
+  csi:
+    driver: file.csi.azure.com
+    volumeHandle: {{ include "app.pvName" . }}
+    volumeAttributes:
+      resourceGroup: {{ include "app.resourceGroup" . }}
+      shareName: {{ include "app.shareName" . }}
+    nodeStageSecretRef:
+      name: storage-secret
+      namespace: {{ .Release.Namespace }}
+{{- end }}

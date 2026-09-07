@@ -1,0 +1,58 @@
+{{- if .Values.cronJobs.enabled }}
+{{- range .Values.cronJobs.jobs }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+spec:
+  schedule: {{ .schedule | quote }}
+  concurrencyPolicy: Allow
+  suspend: false
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: {{ .name }}
+        spec:
+          volumes:
+            - name: azure-file-share
+              persistentVolumeClaim:
+                claimName: {{ include "app.pvcName" $ }}
+          containers:
+            - name: lms
+              image: {{ $.Values.global.image }}
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - '-c'
+                - php app/cron/cron.php --nodes Any --listjob
+              env:
+                - name: LMS_DEBUG_LEVEL
+                  value: Error
+              envFrom:
+                - configMapRef:
+                    name: lms-config
+                - configMapRef:
+                    name: common-config
+                - secretRef:
+                    name: common-secret
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+                requests:
+                  cpu: 250m
+                  memory: 250Mi
+              volumeMounts:
+                - name: azure-file-share
+                  mountPath: /var/www/html/resources
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+          restartPolicy: OnFailure
+{{- end }}
+{{- end }}

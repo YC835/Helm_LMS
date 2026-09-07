@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: universalprofile
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.universalprofile.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: universalprofile
+  template:
+    metadata:
+      labels:
+        app: universalprofile
+    spec:
+      volumes:
+        - name: azure-file-share
+          persistentVolumeClaim:
+            claimName: {{ include "app.pvcName" . }}
+      containers:
+        - name: universalprofile
+          image: {{ .Values.global.upImage }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: up-config
+            - configMapRef:
+                name: common-config
+            - secretRef:
+                name: common-secret
+          env:
+            - name: LMS_DEBUG_LEVEL
+              value: "Error"
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: "2"
+              memory: 8Gi
+          volumeMounts:
+            - name: azure-file-share
+              mountPath: /var/www/html/resources
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: universalprofile
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    {{- if .Values.universalprofile.loadBalancerIP }}
+    service.beta.kubernetes.io/azure-load-balancer-ipv4: {{ .Values.universalprofile.loadBalancerIP | quote }}
+    {{- end }}
+spec:
+  type: LoadBalancer
+  selector:
+    app: universalprofile
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ .Values.universalprofile.servicePort }}
+      targetPort: 80
+  sessionAffinity: None
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster

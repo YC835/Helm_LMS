@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: up-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+data:
+  MASTER_DATABASE_URL: {{ include "app.masterDbUrl" (dict "global" . "dbname" .Values.database.upDbname) | quote }}
+  REPORT_DATABASE_URL: {{ include "app.reportDbUrl" (dict "global" . "dbname" .Values.database.upDbname) | quote }}
+  SLAVE_DATABASE_URL: {{ include "app.slaveDbUrl" (dict "global" . "dbname" .Values.database.upDbname) | quote }}
+  API_AUTHENTICATION_MODE: {{ if and .Values.upConfig (index .Values.upConfig "API_AUTHENTICATION_MODE") }}{{ index .Values.upConfig "API_AUTHENTICATION_MODE" | quote }}{{ else }}"openid"{{ end }}
+  {{- if .Values.upConfig }}
+  {{- range $key, $val := .Values.upConfig }}
+  {{- if not (eq $key "API_AUTHENTICATION_MODE") }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}
+  {{- end }}
+  {{- end }}

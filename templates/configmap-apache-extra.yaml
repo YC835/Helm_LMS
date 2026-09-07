@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apache-extra-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+data:
+  custom_httpd.conf: |
+    ServerAdmin webmaster@localhost
+    DocumentRoot /var/www/html
+
+    LimitRequestFieldSize 1024000
+    LimitRequestLine 16384
+
+    <Directory /var/www/html>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+
+        DirectoryIndex index.php index.html
+
+        RewriteEngine On
+        RewriteBase /
+        RewriteCond %{REQUEST_FILENAME} !-l
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        RewriteRule ^(.*)$ /index.php [QSA,L]
+
+        RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization},L]
+
+        LimitRequestBody 4294967296
+    </Directory>
+
+    <IfModule mod_setenvif.c>
+        SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+    </IfModule>
+
+    <IfModule mpm_event_module>
+        StartServers 4
+        ServerLimit 16
+        ThreadLimit 64
+        ThreadsPerChild 64
+        MaxRequestWorkers 1024
+        MinSpareThreads 75
+        MaxSpareThreads 250
+        MaxConnectionsPerChild 5000
+    </IfModule>
+
+    ErrorLog /proc/self/fd/2
+    CustomLog /proc/self/fd/1 combined
+  performance.conf: >
+    LoadModule deflate_module modules/mod_deflate.so
+
+    LoadModule headers_module modules/mod_headers.so
+
+    LoadModule expires_module modules/mod_expires.so
+
+
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+    application/javascript application/json text/javascript
+
+
+    <FilesMatch "\.(jpg|jpeg|png|gif|ico|css|js|woff|woff2|ttf|svg)$">
+        ExpiresActive On
+        ExpiresDefault "access plus 30 days"
+        Header set Cache-Control "public"
+    </FilesMatch>
+  php-fpm-proxy.conf: |
+    LoadModule proxy_module modules/mod_proxy.so
+    LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so
+    LoadModule rewrite_module modules/mod_rewrite.so
+
+    ProxyPassMatch ^/(.*\.php)$ fcgi://lms:9000/var/www/html/$1
+
+    <LocationMatch "^/fpm-status$">
+        SetHandler "proxy:fcgi://lms:9000"
+        Require all granted
+    </LocationMatch>
+  security.conf: |
+    <Directory /var/www/html>
+        Options -Indexes
+    </Directory>
+
+    <FilesMatch "^\.">
+        Require all denied
+    </FilesMatch>

@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: common-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+data:
+  CACHE_REDIS_HOST: redisnew.{{ .Release.Namespace }}.svc.cluster.local
+  CACHE_REDIS_PORT: "6379"
+  CRON_REDIS_HOST: cronredis.{{ .Release.Namespace }}.svc.cluster.local
+  CRON_REDIS_PORT: "6379"
+  SESSION_REDIS_HOST: redis.{{ .Release.Namespace }}.svc.cluster.local
+  SESSION_REDIS_PORT: "6379"
+  LMS_DEBUG_MODE: {{ if and .Values.commonConfig (index .Values.commonConfig "LMS_DEBUG_MODE") }}{{ index .Values.commonConfig "LMS_DEBUG_MODE" | quote }}{{ else }}"Development"{{ end }}
+  OAUTH2_TOKEN_LIFTTIME: {{ if and .Values.commonConfig (index .Values.commonConfig "OAUTH2_TOKEN_LIFTTIME") }}{{ index .Values.commonConfig "OAUTH2_TOKEN_LIFTTIME" | quote }}{{ else }}"3600"{{ end }}
+  SENDMAIL_MODE: {{ if and .Values.commonConfig (index .Values.commonConfig "SENDMAIL_MODE") }}{{ index .Values.commonConfig "SENDMAIL_MODE" | quote }}{{ else }}"Production"{{ end }}
+  MASTER_DATABASE_USER: {{ if and .Values.commonConfig (index .Values.commonConfig "MASTER_DATABASE_USER") }}{{ index .Values.commonConfig "MASTER_DATABASE_USER" | quote }}{{ else }}"mysqladmin"{{ end }}
+  SLAVE_DATABASE_USER: {{ if and .Values.commonConfig (index .Values.commonConfig "SLAVE_DATABASE_USER") }}{{ index .Values.commonConfig "SLAVE_DATABASE_USER" | quote }}{{ else }}"mysqladmin"{{ end }}
+  REPORT_DATABASE_USER: {{ if and .Values.commonConfig (index .Values.commonConfig "REPORT_DATABASE_USER") }}{{ index .Values.commonConfig "REPORT_DATABASE_USER" | quote }}{{ else }}"mysqladmin"{{ end }}
+  {{- if .Values.commonConfig }}
+  {{- range $key, $val := .Values.commonConfig }}
+  {{- if not (has $key (list "LMS_DEBUG_MODE" "OAUTH2_TOKEN_LIFTTIME" "SENDMAIL_MODE" "MASTER_DATABASE_USER" "SLAVE_DATABASE_USER" "REPORT_DATABASE_USER")) }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
