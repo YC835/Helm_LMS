@@ -1,0 +1,71 @@
+parameters:
+
+- name: Namespace
+  type: string
+
+- name: SecretValuesFile
+  type: string
+
+steps:
+
+- task: DownloadSecureFile@1
+  name: SecretValues
+  displayName: Download Secret Values File
+  inputs:
+    secureFile: ${{ parameters.SecretValuesFile }}
+
+- task: HelmInstaller@1
+  displayName: Install Helm
+  inputs:
+    helmVersionToInstall: latest
+
+# ============================================================
+# STEP 1: Login to AKS subscription
+# ============================================================
+- task: AzureCLI@2
+  displayName: AKS Login
+  inputs:
+    azureSubscription: $(AZURE_AKS_SERVICE_CONNECTION)
+    scriptType: bash
+    scriptLocation: inlineScript
+    inlineScript: |
+      set -e
+
+      echo "Getting AKS credentials..."
+
+      az aks get-credentials \
+        --resource-group $(AKS_RESOURCE_GROUP) \
+        --name $(AKS_CLUSTER_NAME) \
+        --overwrite-existing
+
+      echo "AKS credentials configured."
+
+# ============================================================
+# STEP 2: Login to ACR subscription and install Helm chart
+# ============================================================
+- task: AzureCLI@2
+  displayName: ACR Login & Helm Install
+  inputs:
+    azureSubscription: $(AZURE_ACR_SERVICE_CONNECTION)
+    scriptType: bash
+    scriptLocation: inlineScript
+    inlineScript: |
+      set -e
+
+      echo "Logging into ACR..."
+
+      az acr login \
+        --name acrqa
+
+      echo "ACR login successful."
+
+      echo "Installing Helm chart..."
+
+      helm install ${{ parameters.Namespace }} \
+        oci://acrqa.azurecr.io/helm/lms-app \
+        --version 0.5.0 \
+        --namespace ${{ parameters.Namespace }} \
+        --create-namespace \
+        -f $(SecretValues.secureFilePath)
+
+      echo "Helm installation completed."

@@ -1,0 +1,108 @@
+trigger: none
+pr: none
+
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: EO-TEMPLATES
+
+parameters:
+- name: Cluster
+  displayName: Cluster
+  type: string
+  default: qa_helm
+  values:
+    - qa_helm
+    - siemens_helm
+    - mt_prod_helm
+    - mt_stage_helm
+    - nhu_helm
+    - ur_helm
+
+- name: Namespace
+  displayName: Kubernetes Namespace
+  type: string
+  default: ""
+
+- name: SecretValuesFile
+  displayName: Helm Secret Values File
+  type: string
+  default: ""
+
+variables:
+- group: ${{ parameters.Cluster }}
+
+stages:
+
+# =====================================================
+# Validate
+# =====================================================
+- stage: Validate
+  displayName: Validate & Print Variables
+  jobs:
+  - job: ValidateVariables
+    displayName: Print Variable Group Values
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - script: |
+        echo "====================================="
+        echo "Cluster/Variable Group : ${{ parameters.Cluster }}"
+        echo "Namespace              : ${{ parameters.Namespace }}"
+        echo "Secret Values File     : ${{ parameters.SecretValuesFile }}"
+        echo "====================================="
+        echo "-------------------------------------"
+        echo "Variable Group Values from qa_helm:"
+        # Replace the example variable names below with the actual variable names in your qa_helm group
+        echo "AKS_CLUSTER               : $(AKS_CLUSTER_NAME)"
+        echo "RESOURCE_GROUP           : $(AKS_RESOURCE_GROUP)"
+        echo "SERVICE_CONNECTION           : $(AZURE_SERVICE_CONNECTION)"
+        echo "====================================="
+      displayName: Echo Variables
+
+# =====================================================
+# Approval Gate
+# =====================================================
+- stage: ApprovalGate
+  displayName: Wait for Approval
+  dependsOn: Validate
+  condition: succeeded()
+  jobs:
+  - deployment: Approval
+    displayName: Secure Approval Gate
+    environment: 'Default'
+    pool:
+      vmImage: ubuntu-latest
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: echo "Approved"
+            displayName: Echo Approved
+
+# =====================================================
+# Helm Install
+# =====================================================
+- stage: Helm_Install
+  displayName: Helm Install
+  dependsOn: ApprovalGate
+  condition: succeeded()
+
+  jobs:
+  - job: HelmInstall
+    displayName: Install Helm Chart
+
+    steps:
+    - checkout: self
+
+    - checkout: templates
+
+    - script: |
+        echo "##vso[build.updatebuildnumber]DEPLOYMENT FOR NS - ${{ parameters.Namespace }}"
+      displayName: Update Pipeline Run Name
+
+    - template: helm-install.yml@templates
+      parameters:
+        Namespace: ${{ parameters.Namespace }}
+        SecretValuesFile: ${{ parameters.SecretValuesFile }}
